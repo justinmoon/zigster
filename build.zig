@@ -15,6 +15,12 @@ pub fn build(b: *std.Build) void {
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
 
+    // Get libsecp256k1 dependency
+    const secp256k1 = b.dependency("secp256k1", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
     // This creates a "module", which represents a collection of source files alongside
     // some compilation options, such as optimization mode and linked system libraries.
     // Every executable or library we compile will be based on one or more modules.
@@ -27,6 +33,10 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+
+    // Add libsecp256k1 module to our lib_mod
+    lib_mod.linkLibrary(secp256k1.artifact("libsecp"));
+    lib_mod.addImport("secp256k1", secp256k1.module("secp256k1"));
 
     // We will also create a module for our other entry point, 'main.zig'.
     const exe_mod = b.createModule(.{
@@ -104,6 +114,8 @@ pub fn build(b: *std.Build) void {
     const exe_unit_tests = b.addTest(.{
         .root_module = exe_mod,
     });
+    exe_unit_tests.root_module.addImport("secp256k1", secp256k1.module("secp256k1"));
+    exe_unit_tests.root_module.linkLibrary(secp256k1.artifact("libsecp"));
 
     const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
 

@@ -23,6 +23,10 @@
     // Once all dependencies are fetched, `zig build` no longer requires
     // internet connectivity.
     .dependencies = .{
+        .secp256k1 = .{
+            .url = "https://github.com/justinmoon/libsecp256k1-zig/archive/refs/heads/hacks.tar.gz",
+            .hash = "122067fcd825d04ae8dfcedff1d6b4c5d0e5dcfdbca6a3c6198a3032c43c884245e8",
+        },
         // See `zig fetch --save <url>` for a command-line interface for adding dependencies.
         //.example = .{
         //    // When updating this field to a new URL, be sure to delete the corresponding
