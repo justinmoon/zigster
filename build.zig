@@ -15,8 +15,13 @@ pub fn build(b: *std.Build) void {
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
 
-    // Get libsecp256k1 dependency
+    // Get dependencies
     const secp256k1 = b.dependency("secp256k1", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const websocket = b.dependency("websocket", .{
         .target = target,
         .optimize = optimize,
     });
@@ -34,9 +39,10 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    // Add libsecp256k1 module to our lib_mod
+    // Add dependencies to lib_mod
     lib_mod.linkLibrary(secp256k1.artifact("libsecp"));
     lib_mod.addImport("secp256k1", secp256k1.module("secp256k1"));
+    lib_mod.addImport("websocket", websocket.module("websocket"));
 
     // We will also create a module for our other entry point, 'main.zig'.
     const exe_mod = b.createModule(.{
@@ -116,6 +122,7 @@ pub fn build(b: *std.Build) void {
     });
     exe_unit_tests.root_module.addImport("secp256k1", secp256k1.module("secp256k1"));
     exe_unit_tests.root_module.linkLibrary(secp256k1.artifact("libsecp"));
+    exe_unit_tests.root_module.addImport("websocket", websocket.module("websocket"));
 
     const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
 
