@@ -27,10 +27,7 @@
             .url = "https://github.com/justinmoon/libsecp256k1-zig/archive/refs/heads/hacks.tar.gz",
             .hash = "122067fcd825d04ae8dfcedff1d6b4c5d0e5dcfdbca6a3c6198a3032c43c884245e8",
         },
-        .websocket = .{
-            .url = "https://github.com/karlseguin/websocket.zig/archive/zig-0.13.tar.gz",
-            .hash = "12204ee130dbefc6f0de0c2b9e48f946ae8114f5f111256724122e17575a1ee7e2fb",
-        },
+        .websocket = .{ .url = "https://github.com/justinmoon/websocket.zig/archive/refs/heads/zig-0.13.tar.gz", .hash = "1220db96dbd4b20628391e6bce6b8c20d21fb83c8efd2244b76f2495e62f4d1e9b14" },
         // See `zig fetch --save <url>` for a command-line interface for adding dependencies.
         //.example = .{
         //    // When updating this field to a new URL, be sure to delete the corresponding
