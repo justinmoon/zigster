@@ -78,24 +78,30 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
 
-    // Using our test wrapper that imports all needed modules
-    const lib_unit_tests = b.addTest(.{
+    // Create a test executable
+    const test_exe = b.addTest(.{
+        .name = "zigster-tests",
         .root_source_file = b.path("src/test.zig"),
         .target = target,
         .optimize = optimize,
     });
 
-    // Add module dependencies to the test
-    // Need to link libsecp for the tests
-    lib_unit_tests.linkLibrary(secp256k1.artifact("libsecp"));
+    // Link the secp256k1 library for the tests
+    test_exe.linkLibrary(secp256k1.artifact("libsecp"));
 
-    // Instead of addModule which isn't available, set up include paths for the modules
-    lib_unit_tests.addIncludePath(secp256k1.path("src"));
-    lib_unit_tests.addIncludePath(websocket.path("src"));
-    lib_unit_tests.addIncludePath(b.path("src"));
+    // Add include paths for the tests
+    test_exe.addIncludePath(secp256k1.path("src"));
+    test_exe.addIncludePath(websocket.path("src"));
+    test_exe.addIncludePath(b.path("src"));
 
-    const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
+    // Set up the needed options for finding modules
+    test_exe.root_module.addImport("secp256k1", secp256k1.module("secp256k1"));
+    test_exe.root_module.addImport("websocket", websocket.module("websocket"));
+    test_exe.root_module.addImport("zigster_lib", lib_mod);
 
+    const run_test = b.addRunArtifact(test_exe);
+
+    // Only run the tests
     const test_step = b.step("test", "Run unit tests");
-    test_step.dependOn(&run_lib_unit_tests.step);
+    test_step.dependOn(&run_test.step);
 }

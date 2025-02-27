@@ -1,6 +1,6 @@
 const std = @import("std");
-const secp256k1 = @import("secp256k1");
-const ws = @import("websocket");
+pub const secp256k1 = @import("secp256k1");
+pub const ws = @import("websocket");
 const rand = std.crypto.random;
 
 pub const Note = struct {
@@ -157,66 +157,3 @@ pub const Relay = struct {
         try self.client.write(mutable_msg);
     }
 };
-
-test "Note - create unsigned event" {
-    const testing = std.testing;
-    var arena = std.heap.ArenaAllocator.init(testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-
-    // Create a dummy pubkey
-    const secp = secp256k1.Secp256k1.genNew();
-    defer secp.deinit();
-    const sk, const pk = secp.generateKeypair(std.crypto.random);
-    _ = sk;
-
-    const content = "Hello, Nostr!";
-    const tags = &[_][]const u8{};
-
-    const note = try Note.createUnsigned(
-        allocator,
-        pk,
-        content,
-        tags,
-    );
-
-    try testing.expectEqual(@as(i32, 1), note.kind);
-    try testing.expect(note.sig == null);
-    try testing.expectEqualStrings(content, note.content);
-    try testing.expectEqual(pk, note.pubkey);
-}
-
-test "Create, sign and broadcast note" {
-    const testing = std.testing;
-    var arena = std.heap.ArenaAllocator.init(testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-
-    // Create a test private key (all zeros)
-    var secp = secp256k1.Secp256k1.genNew();
-    defer secp.deinit();
-    const sk, const pubkey = secp.generateKeypair(std.crypto.random);
-
-    var signer = try Signer.init(sk);
-    defer signer.deinit();
-
-    const content = "Hello, Nostr!";
-    const tags = &[_][]const u8{};
-
-    var note = try Note.createUnsigned(allocator, pubkey, content, tags);
-    try signer.signNote(allocator, &note);
-
-    // Verify the note has been signed
-    try testing.expect(note.sig != null);
-    try testing.expect(!std.mem.eql(u8, &note.id, &[_]u8{0} ** 32));
-    try pubkey.verify(&secp, &note.id, note.sig.?);
-
-    // Connect to local relay and broadcast
-    var relay = try Relay.connect(allocator, "127.0.0.1", 8080);
-    defer relay.deinit();
-
-    try relay.broadcast(note);
-
-    // Wait a bit to ensure message is sent before connection is closed
-    std.time.sleep(std.time.ns_per_s);
-}
