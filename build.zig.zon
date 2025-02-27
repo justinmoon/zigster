@@ -28,8 +28,8 @@
             .hash = "122067fcd825d04ae8dfcedff1d6b4c5d0e5dcfdbca6a3c6198a3032c43c884245e8",
         },
         .websocket = .{
-            .url = "https://github.com/karlseguin/websocket.zig/archive/master.tar.gz",
-            .hash = "1220ceeba494d30cfde1ea036f04e14de8be9b0350b5630918af60b0a04545e6b3ce",
+            .url = "https://github.com/karlseguin/websocket.zig/archive/zig-0.13.tar.gz",
+            .hash = "12204ee130dbefc6f0de0c2b9e48f946ae8114f5f111256724122e17575a1ee7e2fb",
         },
         // See `zig fetch --save <url>` for a command-line interface for adding dependencies.
         //.example = .{

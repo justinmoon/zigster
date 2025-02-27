@@ -63,11 +63,12 @@ pub fn build(b: *std.Build) void {
     // Now, we will create a static library based on the module we created above.
     // This creates a `std.Build.Step.Compile`, which is the build step responsible
     // for actually invoking the compiler.
-    const lib = b.addLibrary(.{
-        .linkage = .static,
+    const lib = b.addStaticLibrary(.{
         .name = "zigster",
-        .root_module = lib_mod,
+        .target = target,
+        .optimize = optimize,
     });
+    lib.root_module = lib_mod.*;
 
     // This declares intent for the library to be installed into the standard
     // location when the user invokes the "install" step (the default step when
@@ -78,8 +79,9 @@ pub fn build(b: *std.Build) void {
     // rather than a static library.
     const exe = b.addExecutable(.{
         .name = "zigster",
-        .root_module = exe_mod,
+        .target = target,
     });
+    exe.root_module = exe_mod.*;
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
@@ -112,14 +114,16 @@ pub fn build(b: *std.Build) void {
     // Creates a step for unit testing. This only builds the test executable
     // but does not run it.
     const lib_unit_tests = b.addTest(.{
-        .root_module = lib_mod,
+        .root_source_file = lib_mod.root_source_file.?,
     });
+    lib_unit_tests.root_module = lib_mod.*;
 
     const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
 
     const exe_unit_tests = b.addTest(.{
-        .root_module = exe_mod,
+        .root_source_file = exe_mod.root_source_file.?,
     });
+    exe_unit_tests.root_module = exe_mod.*;
     exe_unit_tests.root_module.addImport("secp256k1", secp256k1.module("secp256k1"));
     exe_unit_tests.root_module.linkLibrary(secp256k1.artifact("libsecp"));
     exe_unit_tests.root_module.addImport("websocket", websocket.module("websocket"));
