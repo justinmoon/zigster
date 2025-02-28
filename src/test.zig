@@ -72,13 +72,6 @@ test "Create, sign and broadcast note" {
     try testing.expect(note.sig != null);
     try testing.expect(!std.mem.eql(u8, &note.id, &[_]u8{0} ** 32));
     try pubkey.verify(&secp, &note.id, note.sig.?);
-
-    // Skip the relay connection part as it requires a local relay and
-    // the websocket API has changed
-    // var relay = try Relay.connect(allocator, "127.0.0.1", 8080);
-    // defer relay.deinit();
-    // try relay.broadcast(note);
-    // std.time.sleep(std.time.ns_per_s);
 }
 
 // Add a new simple test that directly uses secp256k1

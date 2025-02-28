@@ -40,13 +40,15 @@ pub const Note = struct {
         var list = std.ArrayList(u8).init(allocator);
         defer list.deinit();
 
-        try list.writer().print("[0,\"{s}\",{d},{d},{s},\"{s}\"]", .{
-            std.fmt.fmtSliceHexLower(&self.pubkey.xOnlyPublicKey()[0].serialize()),
-            self.created_at,
-            self.kind,
-            try std.json.stringifyAlloc(allocator, self.tags, .{}),
-            self.content,
-        });
+        var writer = std.json.writeStream(list.writer(), .{});
+        try writer.beginArray();
+        try writer.write(0);
+        try writer.write(std.fmt.fmtSliceHexLower(&self.pubkey.xOnlyPublicKey()[0].serialize()));
+        try writer.write(self.created_at);
+        try writer.write(self.kind);
+        try writer.write(self.tags);
+        try writer.write(self.content);
+        try writer.endArray();
 
         hasher.update(list.items);
         hasher.final(&id);
@@ -55,34 +57,19 @@ pub const Note = struct {
 
     /// Convert the note to a JSON string
     pub fn jsonStringify(self: Note, writer: anytype) !void {
-        // Use the std.json writer to correctly serialize the object
         try writer.beginObject();
-
-        // ID field
         try writer.objectField("id");
         try writer.write(std.fmt.fmtSliceHexLower(&self.id));
-
-        // Pubkey field
         try writer.objectField("pubkey");
         try writer.write(std.fmt.fmtSliceHexLower(&self.pubkey.xOnlyPublicKey()[0].serialize()));
-
-        // Created_at field
         try writer.objectField("created_at");
         try writer.write(self.created_at);
-
-        // Kind field
         try writer.objectField("kind");
         try writer.write(self.kind);
-
-        // Tags field
         try writer.objectField("tags");
         try writer.write(self.tags);
-
-        // Content field
         try writer.objectField("content");
         try writer.write(self.content);
-
-        // Signature field (if present)
         if (self.sig) |signature| {
             try writer.objectField("sig");
             try writer.write(std.fmt.fmtSliceHexLower(&signature.toStr()));
@@ -253,19 +240,3 @@ pub const Relay = struct {
         self.client.deinit();
     }
 };
-
-// Illustrating Grok's recommended approach
-// pub fn jsonStringify(self: @This(), out: anytype) !void {
-//     try out.beginArray();
-//     try out.write("EVENT");
-//     try out.beginObject();
-//     try out.objectField("id"); try out.write(self.id);
-//     try out.objectField("pubkey"); try out.write(self.pubkey);
-//     try out.objectField("created_at"); try out.write(self.created_at);
-//     try out.objectField("kind"); try out.write(self.kind);
-//     try out.objectField("tags"); try out.write(self.tags);
-//     try out.objectField("content"); try out.write(self.content);
-//     try out.objectField("sig"); try out.write(self.sig);
-//     try out.endObject();
-//     try out.endArray();
-// }
