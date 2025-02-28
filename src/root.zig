@@ -42,7 +42,9 @@ pub const Note = struct {
         var writer = std.json.writeStream(list.writer(), .{});
         try writer.beginArray();
         try writer.write(0);
-        try writer.write(std.fmt.fmtSliceHexLower(&self.pubkey));
+        const pubkey_hex = try std.fmt.allocPrint(allocator, "{s}", .{std.fmt.fmtSliceHexLower(&self.pubkey)});
+        defer allocator.free(pubkey_hex);
+        try writer.write(pubkey_hex);
         try writer.write(self.created_at);
         try writer.write(self.kind);
         try writer.write(self.tags);

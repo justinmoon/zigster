@@ -152,153 +152,153 @@ test "Note serialization round-trip" {
     std.debug.print("Round-trip serialization test passed successfully!\n", .{});
 }
 
-// test "Full Nostr workflow - create, sign, broadcast, and verify" {
-//     const testing = std.testing;
-//     std.debug.print("\n>> Running test: Full Nostr workflow\n", .{});
+test "Full Nostr workflow - create, sign, broadcast, and verify" {
+    const testing = std.testing;
+    std.debug.print("\n>> Running test: Full Nostr workflow\n", .{});
 
-//     var arena = std.heap.ArenaAllocator.init(testing.allocator);
-//     defer arena.deinit();
-//     const allocator = arena.allocator();
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
 
-//     // 1. Create a keypair
-//     var secp = secp256k1.Secp256k1.genNew();
-//     defer secp.deinit();
-//     const secret_key, const pubkey = secp.generateKeypair(std.crypto.random);
+    // 1. Create a keypair
+    var secp = secp256k1.Secp256k1.genNew();
+    defer secp.deinit();
+    const secret_key, const pubkey = secp.generateKeypair(std.crypto.random);
 
-//     // 2. Create a signer with the secret key
-//     var signer = try Signer.init(secret_key);
-//     defer signer.deinit();
+    // 2. Create a signer with the secret key
+    var signer = try Signer.init(secret_key);
+    defer signer.deinit();
 
-//     // 3. Create a note with content "Hello, nostr"
-//     const content = "Hello, nostr";
-//     const tags = try allocator.alloc([]const u8, 0); // Empty tags for simplicity
+    // 3. Create a note with content "Hello, nostr"
+    const content = "Hello, nostr";
+    const tags = try allocator.alloc([]const u8, 0); // Empty tags for simplicity
 
-//     const pubkey_bytes = pubkey.xOnlyPublicKey()[0].serialize();
-//     var note = try Note.createUnsigned(allocator, pubkey_bytes, content, tags);
+    const pubkey_bytes = pubkey.xOnlyPublicKey()[0].serialize();
+    var note = try Note.createUnsigned(allocator, pubkey_bytes, content, tags);
 
-//     // 4. Sign the note
-//     try signer.signNote(allocator, &note);
-//     std.debug.print("Created and signed note with ID: {s}\n", .{std.fmt.fmtSliceHexLower(&note.id)});
+    // 4. Sign the note
+    try signer.signNote(allocator, &note);
+    std.debug.print("Created and signed note with ID: {s}\n", .{std.fmt.fmtSliceHexLower(&note.id)});
 
-//     // 5. Connect to a local relay
-//     var client = try root.NostrClient.connect(allocator, "localhost", 8080);
-//     defer client.deinit();
-//     std.debug.print("Connected to relay at localhost:8080\n", .{});
+    // 5. Connect to a local relay
+    var client = try root.NostrClient.connect(allocator, "localhost", 8080);
+    defer client.deinit();
+    std.debug.print("Connected to relay at localhost:8080\n", .{});
 
-//     // 6. Create an EVENT message to broadcast the note
-//     const event_msg = root.ClientMessage{ .Event = note };
+    // 6. Create an EVENT message to broadcast the note
+    const event_msg = root.ClientMessage{ .Event = note };
 
-//     // 7. Serialize and send the message
-//     var serialized_msg = std.ArrayList(u8).init(allocator);
-//     defer serialized_msg.deinit();
-//     try std.json.stringify(event_msg, .{}, serialized_msg.writer());
+    // 7. Serialize and send the message
+    var serialized_msg = std.ArrayList(u8).init(allocator);
+    defer serialized_msg.deinit();
+    try std.json.stringify(event_msg, .{}, serialized_msg.writer());
 
-//     // Debug print to see what we're sending
-//     std.debug.print("EVENT message JSON: {s}\n", .{serialized_msg.items});
+    // Debug print to see what we're sending
+    std.debug.print("EVENT message JSON: {s}\n", .{serialized_msg.items});
 
-//     try client.client.writeFrame(.text, serialized_msg.items);
-//     std.debug.print("Sent EVENT message to relay\n", .{});
+    try client.client.writeFrame(.text, serialized_msg.items);
+    std.debug.print("Sent EVENT message to relay\n", .{});
 
-//     // 8. Wait a moment for the relay to process the event
-//     std.time.sleep(std.time.ns_per_s * 1); // Sleep for 1 second
+    // 8. Wait a moment for the relay to process the event
+    std.time.sleep(std.time.ns_per_s * 1); // Sleep for 1 second
 
-//     // 9. Create a REQ message to verify the note was accepted
-//     const subscription_id = "test-sub-1";
-//     var filter = root.Filter.init(allocator);
+    // 9. Create a REQ message to verify the note was accepted
+    const subscription_id = "test-sub-1";
+    var filter = root.Filter.init(allocator);
 
-//     // Create a hex string for the ID
-//     var id_hex_buf: [64]u8 = undefined; // 32 bytes = 64 hex chars
-//     _ = try std.fmt.bufPrint(&id_hex_buf, "{s}", .{std.fmt.fmtSliceHexLower(&note.id)});
+    // Create a hex string for the ID
+    var id_hex_buf: [64]u8 = undefined; // 32 bytes = 64 hex chars
+    _ = try std.fmt.bufPrint(&id_hex_buf, "{s}", .{std.fmt.fmtSliceHexLower(&note.id)});
 
-//     // Create the ids array with the value already in it
-//     var ids = try allocator.alloc([]const u8, 1);
-//     ids[0] = try allocator.dupe(u8, id_hex_buf[0..]);
-//     filter.ids = ids;
+    // Create the ids array with the value already in it
+    var ids = try allocator.alloc([]const u8, 1);
+    ids[0] = try allocator.dupe(u8, id_hex_buf[0..]);
+    filter.ids = ids;
 
-//     var filters = try allocator.alloc(root.Filter, 1);
-//     filters[0] = filter;
+    var filters = try allocator.alloc(root.Filter, 1);
+    filters[0] = filter;
 
-//     const req_msg = root.ClientMessage{ .Req = .{
-//         .subscription_id = subscription_id,
-//         .filters = filters,
-//     } };
+    const req_msg = root.ClientMessage{ .Req = .{
+        .subscription_id = subscription_id,
+        .filters = filters,
+    } };
 
-//     // 10. Serialize and send the REQ message
-//     serialized_msg.clearRetainingCapacity();
-//     try std.json.stringify(req_msg, .{}, serialized_msg.writer());
+    // 10. Serialize and send the REQ message
+    serialized_msg.clearRetainingCapacity();
+    try std.json.stringify(req_msg, .{}, serialized_msg.writer());
 
-//     // Debug print to see what we're sending
-//     std.debug.print("REQ message JSON: {s}\n", .{serialized_msg.items});
+    // Debug print to see what we're sending
+    std.debug.print("REQ message JSON: {s}\n", .{serialized_msg.items});
 
-//     try client.client.writeFrame(.text, serialized_msg.items);
-//     std.debug.print("Sent REQ message to relay\n", .{});
+    try client.client.writeFrame(.text, serialized_msg.items);
+    std.debug.print("Sent REQ message to relay\n", .{});
 
-//     // 11. Read the response from the relay
-//     var found_event = false;
-//     var received_eose = false;
+    // 11. Read the response from the relay
+    var found_event = false;
+    var received_eose = false;
 
-//     // Create a handler to process messages
-//     const Handler = struct {
-//         found_event: *bool,
-//         received_eose: *bool,
-//         subscription_id: []const u8,
-//         note_id: *const [32]u8,
-//         allocator: std.mem.Allocator,
+    // Create a handler to process messages
+    const Handler = struct {
+        found_event: *bool,
+        received_eose: *bool,
+        subscription_id: []const u8,
+        note_id: *const [32]u8,
+        allocator: std.mem.Allocator,
 
-//         pub fn handle(self: @This(), message: websocket.Message) !void {
-//             if (message.data.len == 0) return;
+        pub fn handle(self: @This(), message: websocket.Message) !void {
+            if (message.data.len == 0) return;
 
-//             std.debug.print("Received message: {s}\n", .{message.data});
+            std.debug.print("Received message: {s}\n", .{message.data});
 
-//             // Parse the response
-//             const relay_msg = try root.RelayMessage.jsonParse(self.allocator, message.data);
+            // Parse the response
+            const relay_msg = try root.RelayMessage.jsonParse(self.allocator, message.data);
 
-//             switch (relay_msg) {
-//                 .Event => |event| {
-//                     if (std.mem.eql(u8, event.subscription_id, self.subscription_id)) {
-//                         // Check if this is our event
-//                         if (std.mem.eql(u8, &event.event.id, self.note_id)) {
-//                             self.found_event.* = true;
-//                             // Use a different name for this buffer to avoid shadowing
-//                             var event_id_hex_buf: [64]u8 = undefined;
-//                             _ = std.fmt.bufPrint(&event_id_hex_buf, "{s}", .{std.fmt.fmtSliceHexLower(self.note_id)}) catch unreachable;
-//                             std.debug.print("Found our event in the relay response: {s}!\n", .{event_id_hex_buf[0..]});
-//                         }
-//                     }
-//                 },
-//                 .Eose => |eose_sub_id| {
-//                     if (std.mem.eql(u8, eose_sub_id, self.subscription_id)) {
-//                         self.received_eose.* = true;
-//                         std.debug.print("Received EOSE for our subscription\n", .{});
-//                     }
-//                 },
-//                 else => {},
-//             }
-//         }
+            switch (relay_msg) {
+                .Event => |event| {
+                    if (std.mem.eql(u8, event.subscription_id, self.subscription_id)) {
+                        // Check if this is our event
+                        if (std.mem.eql(u8, &event.event.id, self.note_id)) {
+                            self.found_event.* = true;
+                            // Use a different name for this buffer to avoid shadowing
+                            var event_id_hex_buf: [64]u8 = undefined;
+                            _ = std.fmt.bufPrint(&event_id_hex_buf, "{s}", .{std.fmt.fmtSliceHexLower(self.note_id)}) catch unreachable;
+                            std.debug.print("Found our event in the relay response: {s}!\n", .{event_id_hex_buf[0..]});
+                        }
+                    }
+                },
+                .Eose => |eose_sub_id| {
+                    if (std.mem.eql(u8, eose_sub_id, self.subscription_id)) {
+                        self.received_eose.* = true;
+                        std.debug.print("Received EOSE for our subscription\n", .{});
+                    }
+                },
+                else => {},
+            }
+        }
 
-//         pub fn close(_: @This()) void {}
-//     };
+        pub fn close(_: @This()) void {}
+    };
 
-//     // Create the handler and start the read loop in a new thread
-//     const handler = Handler{
-//         .found_event = &found_event,
-//         .received_eose = &received_eose,
-//         .subscription_id = subscription_id,
-//         .note_id = &note.id,
-//         .allocator = allocator,
-//     };
+    // Create the handler and start the read loop in a new thread
+    const handler = Handler{
+        .found_event = &found_event,
+        .received_eose = &received_eose,
+        .subscription_id = subscription_id,
+        .note_id = &note.id,
+        .allocator = allocator,
+    };
 
-//     _ = try client.client.readLoopInNewThread(handler);
+    _ = try client.client.readLoopInNewThread(handler);
 
-//     // Wait for the EOSE message or timeout
-//     const start_time = std.time.milliTimestamp();
-//     const timeout_ms = 5000; // 5 second timeout
+    // Wait for the EOSE message or timeout
+    const start_time = std.time.milliTimestamp();
+    const timeout_ms = 5000; // 5 second timeout
 
-//     while (!received_eose and std.time.milliTimestamp() - start_time < timeout_ms) {
-//         std.time.sleep(10 * std.time.ns_per_ms); // Sleep briefly to avoid tight loop
-//     }
+    while (!received_eose and std.time.milliTimestamp() - start_time < timeout_ms) {
+        std.time.sleep(10 * std.time.ns_per_ms); // Sleep briefly to avoid tight loop
+    }
 
-//     // 12. Verify we found our event
-//     try testing.expect(found_event);
-//     std.debug.print("Test completed successfully!\n", .{});
-// }
+    // 12. Verify we found our event
+    try testing.expect(found_event);
+    std.debug.print("Test completed successfully!\n", .{});
+}
