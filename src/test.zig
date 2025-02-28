@@ -134,7 +134,7 @@ test "Note serialization round-trip" {
     note.id = try note.calculateId(allocator);
 
     // Serialize to JSON
-    const serialized_json = try note.jsonStringify(allocator);
+    const serialized_json = try note.toJsonString(allocator);
     defer allocator.free(serialized_json);
     std.debug.print("Serialized JSON: {s}\n", .{serialized_json});
 

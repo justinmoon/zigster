@@ -53,61 +53,33 @@ pub const Note = struct {
         return id;
     }
 
-    /// Serialize the note into a JSON string suitable for sending to a relay
-    pub fn serialize(self: Note, allocator: std.mem.Allocator) ![]const u8 {
-        if (self.sig == null) return error.NoteNotSigned;
-
-        // Escape content for JSON
-        const escaped_content = try std.json.stringifyAlloc(allocator, self.content, .{});
-        defer allocator.free(escaped_content);
-
-        // Format the event object
-        var event = std.ArrayList(u8).init(allocator);
-        defer event.deinit();
-
-        try event.writer().print("{{\"id\":\"{s}\",\"pubkey\":\"{s}\",\"created_at\":{d},\"kind\":{d},\"tags\":{s},\"content\":{s},\"sig\":\"{s}\"}}", .{
-            std.fmt.fmtSliceHexLower(&self.id),
-            std.fmt.fmtSliceHexLower(&self.pubkey.xOnlyPublicKey()[0].serialize()),
-            self.created_at,
-            self.kind,
-            try std.json.stringifyAlloc(allocator, self.tags, .{}),
-            escaped_content, // Use the escaped content
-            std.fmt.fmtSliceHexLower(&self.sig.?.toStr()),
-        });
-
-        // Format the complete message
-        var msg = std.ArrayList(u8).init(allocator);
-        try msg.writer().print("[\"EVENT\",{s}]", .{event.items});
-        return msg.toOwnedSlice();
-    }
-
     /// Convert the note to a JSON string
-    pub fn jsonStringify(self: Note, allocator: std.mem.Allocator) ![]const u8 {
-        var json = std.ArrayList(u8).init(allocator);
-        defer json.deinit();
+    pub fn toJsonString(self: Note, allocator: std.mem.Allocator) ![]const u8 {
+        var buffer = std.ArrayList(u8).init(allocator);
+        errdefer buffer.deinit();
+        const writer = buffer.writer();
+
+        // Manually serialize the Note object to match the expected format
+        try writer.writeAll("{");
+        try writer.print("\"id\":\"{s}\",", .{std.fmt.fmtSliceHexLower(&self.id)});
+        try writer.print("\"pubkey\":\"{s}\",", .{std.fmt.fmtSliceHexLower(&self.pubkey.xOnlyPublicKey()[0].serialize())});
+        try writer.print("\"created_at\":{d},", .{self.created_at});
+        try writer.print("\"kind\":{d},", .{self.kind});
+        try writer.print("\"tags\":{s},", .{try std.json.stringifyAlloc(allocator, self.tags, .{})});
 
         // Escape content for JSON
         const escaped_content = try std.json.stringifyAlloc(allocator, self.content, .{});
         defer allocator.free(escaped_content);
-
-        try json.writer().print("{{\"id\":\"{s}\",\"pubkey\":\"{s}\",\"created_at\":{d},\"kind\":{d},\"tags\":{s},\"content\":{s}", .{
-            std.fmt.fmtSliceHexLower(&self.id),
-            std.fmt.fmtSliceHexLower(&self.pubkey.xOnlyPublicKey()[0].serialize()),
-            self.created_at,
-            self.kind,
-            try std.json.stringifyAlloc(allocator, self.tags, .{}),
-            escaped_content, // Use the escaped content here
-        });
+        try writer.print("\"content\":{s}", .{escaped_content});
 
         // Add signature if present
         if (self.sig) |signature| {
-            try json.writer().print(",\"sig\":\"{s}\"", .{
-                std.fmt.fmtSliceHexLower(&signature.toStr()),
-            });
+            try writer.print(",\"sig\":\"{s}\"", .{std.fmt.fmtSliceHexLower(&signature.toStr())});
         }
 
-        try json.writer().print("}}", .{});
-        return json.toOwnedSlice();
+        try writer.writeAll("}");
+
+        return buffer.toOwnedSlice();
     }
 
     /// Parse a JSON string into a Note
@@ -246,16 +218,20 @@ pub const Relay = struct {
     pub fn deinit(self: *Relay) void {
         self.client.deinit();
     }
-
-    pub fn broadcast(self: *Relay, note: Note) !void {
-        // Serialize the note to JSON
-        const msg = try note.serialize(self.allocator);
-        defer self.allocator.free(msg);
-
-        // Convert to mutable slice as required by websocket.zig
-        const mutable_msg = try self.allocator.dupe(u8, msg);
-        defer self.allocator.free(mutable_msg);
-
-        try self.client.write(mutable_msg);
-    }
 };
+
+// Illustrating Grok's recommended approach
+// pub fn jsonStringify(self: @This(), out: anytype) !void {
+//     try out.beginArray();
+//     try out.write("EVENT");
+//     try out.beginObject();
+//     try out.objectField("id"); try out.write(self.id);
+//     try out.objectField("pubkey"); try out.write(self.pubkey);
+//     try out.objectField("created_at"); try out.write(self.created_at);
+//     try out.objectField("kind"); try out.write(self.kind);
+//     try out.objectField("tags"); try out.write(self.tags);
+//     try out.objectField("content"); try out.write(self.content);
+//     try out.objectField("sig"); try out.write(self.sig);
+//     try out.endObject();
+//     try out.endArray();
+// }
