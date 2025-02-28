@@ -72,7 +72,8 @@ test "Create, sign and broadcast note" {
     // Verify the note has been signed
     try testing.expect(note.sig != null);
     try testing.expect(!std.mem.eql(u8, &note.id, &[_]u8{0} ** 32));
-    try pubkey.verify(&secp, &note.id, note.sig.?);
+    const signature = secp256k1.schnorr.Signature{ .inner = note.sig.? };
+    try pubkey.verify(&secp, &note.id, signature);
 }
 
 // Add a new simple test that directly uses secp256k1
@@ -145,6 +146,8 @@ test "Note serialization round-trip" {
     try testing.expectEqual(note.created_at, roundtrip_note.created_at);
     try testing.expectEqual(note.kind, roundtrip_note.kind);
     try testing.expectEqualStrings(note.content, roundtrip_note.content);
+    // this isn't signed so can't compare
+    // try testing.expectEqualSlices(u8, &note.sig.?, &roundtrip_note.sig.?);
 
     std.debug.print("Round-trip serialization test passed successfully!\n", .{});
 }

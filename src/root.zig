@@ -11,8 +11,7 @@ pub const Note = struct {
     kind: i32,
     tags: [][]const u8,
     content: []const u8,
-    // sig: ?[64]u8,
-    sig: ?secp256k1.schnorr.Signature,
+    sig: ?[64]u8,
 
     pub fn createUnsigned(
         _: std.mem.Allocator,
@@ -81,8 +80,7 @@ pub const Note = struct {
         if (self.sig) |signature| {
             try writer.objectField("sig");
             // Convert signature to hex string
-            const sig_str = signature.toStr();
-            const sig_hex = try std.fmt.allocPrint(std.heap.page_allocator, "{s}", .{std.fmt.fmtSliceHexLower(&sig_str)});
+            const sig_hex = try std.fmt.allocPrint(std.heap.page_allocator, "{s}", .{std.fmt.fmtSliceHexLower(&signature)});
             defer std.heap.page_allocator.free(sig_hex);
             try writer.write(sig_hex);
         }
@@ -170,12 +168,9 @@ pub const Note = struct {
         // Parse signature if present
         if (root.get("sig")) |sig_value| {
             const sig_str = sig_value.string;
-            // The signature might be too long, let's extract the correct number of bytes
             var sig_bytes: [64]u8 = undefined;
             _ = try std.fmt.hexToBytes(&sig_bytes, sig_str);
-            var sig_str_normalized: [128]u8 = undefined; // 64 bytes * 2 for hex
-            _ = try std.fmt.bufPrint(&sig_str_normalized, "{s}", .{std.fmt.fmtSliceHexLower(&sig_bytes)});
-            note.sig = try secp256k1.schnorr.Signature.fromStr(sig_str_normalized[0..128]);
+            note.sig = sig_bytes;
         }
 
         return note;
@@ -207,8 +202,8 @@ pub const Signer = struct {
     /// Sign a note, updating its id and sig fields
     pub fn signNote(self: *Signer, allocator: std.mem.Allocator, note: *Note) !void {
         note.id = try note.calculateId(allocator);
-        const signature = self.secret_key.sign(&note.id);
-        note.sig = try signature;
+        const signature = try self.secret_key.sign(&note.id);
+        note.sig = signature.inner;
     }
 };
 
