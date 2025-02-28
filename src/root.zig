@@ -76,6 +76,90 @@ pub const Note = struct {
         try msg.writer().print("[\"EVENT\",{s}]", .{event.items});
         return msg.toOwnedSlice();
     }
+
+    /// Convert the note to a JSON string
+    pub fn jsonStringify(self: Note, allocator: std.mem.Allocator) ![]const u8 {
+        var json = std.ArrayList(u8).init(allocator);
+        defer json.deinit();
+
+        try json.writer().print("{{\"id\":\"{s}\",\"pubkey\":\"{s}\",\"created_at\":{d},\"kind\":{d},\"tags\":{s},\"content\":\"{s}\"", .{
+            std.fmt.fmtSliceHexLower(&self.id),
+            std.fmt.fmtSliceHexLower(&self.pubkey.xOnlyPublicKey()[0].serialize()),
+            self.created_at,
+            self.kind,
+            try std.json.stringifyAlloc(allocator, self.tags, .{}),
+            self.content,
+        });
+
+        // Add signature if present
+        if (self.sig) |signature| {
+            try json.writer().print(",\"sig\":\"{s}\"", .{
+                std.fmt.fmtSliceHexLower(&signature.toStr()),
+            });
+        }
+
+        try json.writer().print("}}", .{});
+        return json.toOwnedSlice();
+    }
+
+    /// Parse a JSON string into a Note
+    pub fn jsonParse(allocator: std.mem.Allocator, json_str: []const u8) !Note {
+        var parser = std.json.TokenStream.init(json_str);
+        const json = try std.json.parse(std.json.Value, &parser, .{ .allocator = allocator });
+        defer std.json.parseFree(std.json.Value, json, .{ .allocator = allocator });
+
+        const root = json.object;
+
+        // Parse id
+        var id: [32]u8 = undefined;
+        const id_str = root.get("id").?.string;
+        _ = try std.fmt.hexToBytes(&id, id_str);
+
+        // Parse pubkey
+        var pubkey_bytes: [33]u8 = undefined;
+        pubkey_bytes[0] = 0x02; // Add prefix byte (will be corrected when PublicKey is created)
+        const pubkey_str = root.get("pubkey").?.string;
+        _ = try std.fmt.hexToBytes(pubkey_bytes[1..], pubkey_str);
+        const pubkey = try secp256k1.PublicKey.fromSec1(&pubkey_bytes);
+
+        // Parse created_at
+        const created_at = @as(i64, @intCast(root.get("created_at").?.integer));
+
+        // Parse kind
+        const kind = @as(i32, @intCast(root.get("kind").?.integer));
+
+        // Parse content
+        const content = root.get("content").?.string;
+
+        // Parse tags - this is more complex as it's a nested structure
+        const tags_json = root.get("tags").?.array;
+        var tags = try allocator.alloc([]const u8, tags_json.items.len);
+        for (tags_json.items, 0..) |tag_array, i| {
+            const tag_items = tag_array.array.items;
+            tags[i] = try allocator.dupe(u8, tag_items[0].string);
+        }
+
+        // Create note with parsed values
+        var note = Note{
+            .id = id,
+            .pubkey = pubkey,
+            .created_at = created_at,
+            .kind = kind,
+            .tags = tags,
+            .content = try allocator.dupe(u8, content),
+            .sig = null,
+        };
+
+        // Parse signature if present
+        if (root.get("sig")) |sig_value| {
+            const sig_str = sig_value.string;
+            var sig_bytes: [64]u8 = undefined;
+            _ = try std.fmt.hexToBytes(&sig_bytes, sig_str);
+            note.sig = try secp256k1.schnorr.Signature.fromBytes(sig_bytes);
+        }
+
+        return note;
+    }
 };
 
 // Maybe not necessary???
