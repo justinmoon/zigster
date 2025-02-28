@@ -507,14 +507,15 @@ pub const RelayMessage = union(enum) {
     }
 };
 
-pub const Relay = struct {
+pub const NostrClient = struct {
     client: ws.Client,
     allocator: std.mem.Allocator,
 
-    pub fn connect(allocator: std.mem.Allocator, host: []const u8, port: u16) !Relay {
-        var client = try ws.Client.init(allocator, .{
-            .port = port,
-            .host = host,
+    pub fn connect(allocator: std.mem.Allocator, host: []const u8, port: u16) !NostrClient {
+        // Use the websocket.connect function directly as shown in the example
+        var client = try ws.connect(allocator, host, port, .{
+            .buffer_size = 4096, // Add reasonable buffer size
+            .max_size = 1 << 20, // ~1MB max message size
         });
         errdefer client.deinit();
 
@@ -524,13 +525,13 @@ pub const Relay = struct {
             .headers = try std.fmt.allocPrint(allocator, "Host: {s}:{d}\r\n", .{ host, port }),
         });
 
-        return Relay{
+        return NostrClient{
             .client = client,
             .allocator = allocator,
         };
     }
 
-    pub fn deinit(self: *Relay) void {
+    pub fn deinit(self: *NostrClient) void {
         self.client.deinit();
     }
 };
