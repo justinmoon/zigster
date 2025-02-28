@@ -134,12 +134,15 @@ test "Note serialization round-trip" {
     note.id = try note.calculateId(allocator);
 
     // Serialize to JSON
-    const serialized_json = try note.toJsonString(allocator);
-    defer allocator.free(serialized_json);
-    std.debug.print("Serialized JSON: {s}\n", .{serialized_json});
+    var serialized_json = std.ArrayList(u8).init(allocator);
+    defer serialized_json.deinit();
+
+    try std.json.stringify(note, .{}, serialized_json.writer());
+
+    std.debug.print("Serialized JSON: {s}\n", .{serialized_json.items});
 
     // Parse back into a Note
-    var roundtrip_note = try Note.jsonParse(allocator, serialized_json);
+    var roundtrip_note = try Note.jsonParse(allocator, serialized_json.items);
     std.debug.print("Successfully roundtrip parsed Note object\n", .{});
 
     // Verify key fields match

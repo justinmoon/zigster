@@ -54,32 +54,41 @@ pub const Note = struct {
     }
 
     /// Convert the note to a JSON string
-    pub fn toJsonString(self: Note, allocator: std.mem.Allocator) ![]const u8 {
-        var buffer = std.ArrayList(u8).init(allocator);
-        errdefer buffer.deinit();
-        const writer = buffer.writer();
+    pub fn jsonStringify(self: Note, writer: anytype) !void {
+        // Use the std.json writer to correctly serialize the object
+        try writer.beginObject();
 
-        // Manually serialize the Note object to match the expected format
-        try writer.writeAll("{");
-        try writer.print("\"id\":\"{s}\",", .{std.fmt.fmtSliceHexLower(&self.id)});
-        try writer.print("\"pubkey\":\"{s}\",", .{std.fmt.fmtSliceHexLower(&self.pubkey.xOnlyPublicKey()[0].serialize())});
-        try writer.print("\"created_at\":{d},", .{self.created_at});
-        try writer.print("\"kind\":{d},", .{self.kind});
-        try writer.print("\"tags\":{s},", .{try std.json.stringifyAlloc(allocator, self.tags, .{})});
+        // ID field
+        try writer.objectField("id");
+        try writer.write(std.fmt.fmtSliceHexLower(&self.id));
 
-        // Escape content for JSON
-        const escaped_content = try std.json.stringifyAlloc(allocator, self.content, .{});
-        defer allocator.free(escaped_content);
-        try writer.print("\"content\":{s}", .{escaped_content});
+        // Pubkey field
+        try writer.objectField("pubkey");
+        try writer.write(std.fmt.fmtSliceHexLower(&self.pubkey.xOnlyPublicKey()[0].serialize()));
 
-        // Add signature if present
+        // Created_at field
+        try writer.objectField("created_at");
+        try writer.write(self.created_at);
+
+        // Kind field
+        try writer.objectField("kind");
+        try writer.write(self.kind);
+
+        // Tags field
+        try writer.objectField("tags");
+        try writer.write(self.tags);
+
+        // Content field
+        try writer.objectField("content");
+        try writer.write(self.content);
+
+        // Signature field (if present)
         if (self.sig) |signature| {
-            try writer.print(",\"sig\":\"{s}\"", .{std.fmt.fmtSliceHexLower(&signature.toStr())});
+            try writer.objectField("sig");
+            try writer.write(std.fmt.fmtSliceHexLower(&signature.toStr()));
         }
 
-        try writer.writeAll("}");
-
-        return buffer.toOwnedSlice();
+        try writer.endObject();
     }
 
     /// Parse a JSON string into a Note
@@ -91,14 +100,42 @@ pub const Note = struct {
 
         // Parse id
         var id: [32]u8 = undefined;
-        const id_str = root.get("id").?.string;
-        _ = try std.fmt.hexToBytes(&id, id_str);
+        const id_value = root.get("id").?;
+        if (id_value == .object and id_value.object.contains("data")) {
+            // Handle data array format
+            const id_data = id_value.object.get("data").?.array;
+            for (id_data.items, 0..) |byte, i| {
+                id[i] = @intCast(byte.integer);
+            }
+        } else if (id_value == .string) {
+            // Handle string format (for backward compatibility)
+            const id_str = id_value.string;
+            _ = try std.fmt.hexToBytes(&id, id_str);
+        } else {
+            return error.InvalidIdFormat;
+        }
 
         // Parse pubkey
         var pubkey_bytes: [33]u8 = undefined;
         pubkey_bytes[0] = 0x02; // Add prefix byte (will be corrected when PublicKey is created)
-        const pubkey_str = root.get("pubkey").?.string;
-        _ = try std.fmt.hexToBytes(pubkey_bytes[1..], pubkey_str);
+
+        const pubkey_value = root.get("pubkey").?;
+        if (pubkey_value == .object and pubkey_value.object.contains("data")) {
+            // Handle data array format
+            const pubkey_data = pubkey_value.object.get("data").?.array;
+            for (pubkey_data.items, 0..) |byte, i| {
+                if (i < 32) { // Ensure we don't go out of bounds
+                    pubkey_bytes[i + 1] = @intCast(byte.integer);
+                }
+            }
+        } else if (pubkey_value == .string) {
+            // Handle string format (for backward compatibility)
+            const pubkey_str = pubkey_value.string;
+            _ = try std.fmt.hexToBytes(pubkey_bytes[1..], pubkey_str);
+        } else {
+            return error.InvalidPubkeyFormat;
+        }
+
         const pubkey = try secp256k1.PublicKey.fromSlice(&pubkey_bytes);
 
         // Parse created_at
@@ -178,9 +215,6 @@ pub const Signer = struct {
     pub fn signNote(self: *Signer, allocator: std.mem.Allocator, note: *Note) !void {
         note.id = try note.calculateId(allocator);
         const signature = self.secret_key.sign(&note.id);
-        // if (signature) {
-        //     note.sig = signature;
-        // }
         note.sig = try signature;
     }
 };
