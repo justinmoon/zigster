@@ -6,7 +6,7 @@ const rand = std.crypto.random;
 pub const Note = struct {
     // FIXME: should be a method?
     id: [32]u8,
-    pubkey: secp256k1.PublicKey,
+    pubkey: [32]u8,
     created_at: i64,
     kind: i32,
     tags: [][]const u8,
@@ -16,7 +16,7 @@ pub const Note = struct {
 
     pub fn createUnsigned(
         _: std.mem.Allocator,
-        pubkey: secp256k1.PublicKey,
+        pubkey: [32]u8,
         content: []const u8,
         tags: [][]const u8,
     ) !Note {
@@ -43,7 +43,7 @@ pub const Note = struct {
         var writer = std.json.writeStream(list.writer(), .{});
         try writer.beginArray();
         try writer.write(0);
-        try writer.write(std.fmt.fmtSliceHexLower(&self.pubkey.xOnlyPublicKey()[0].serialize()));
+        try writer.write(std.fmt.fmtSliceHexLower(&self.pubkey));
         try writer.write(self.created_at);
         try writer.write(self.kind);
         try writer.write(self.tags);
@@ -66,8 +66,7 @@ pub const Note = struct {
 
         try writer.objectField("pubkey");
         // Convert pubkey to hex string
-        const pubkey_bytes = self.pubkey.xOnlyPublicKey()[0].serialize();
-        const pubkey_hex = try std.fmt.allocPrint(std.heap.page_allocator, "{s}", .{std.fmt.fmtSliceHexLower(&pubkey_bytes)});
+        const pubkey_hex = try std.fmt.allocPrint(std.heap.page_allocator, "{s}", .{std.fmt.fmtSliceHexLower(&self.pubkey)});
         defer std.heap.page_allocator.free(pubkey_hex);
         try writer.write(pubkey_hex);
 
@@ -116,27 +115,21 @@ pub const Note = struct {
         }
 
         // Parse pubkey
-        var pubkey_bytes: [33]u8 = undefined;
-        pubkey_bytes[0] = 0x02; // Add prefix byte (will be corrected when PublicKey is created)
-
+        var pubkey: [32]u8 = undefined;
         const pubkey_value = root.get("pubkey").?;
         if (pubkey_value == .object and pubkey_value.object.contains("data")) {
             // Handle data array format
             const pubkey_data = pubkey_value.object.get("data").?.array;
             for (pubkey_data.items, 0..) |byte, i| {
-                if (i < 32) { // Ensure we don't go out of bounds
-                    pubkey_bytes[i + 1] = @intCast(byte.integer);
-                }
+                pubkey[i] = @intCast(byte.integer);
             }
         } else if (pubkey_value == .string) {
             // Handle string format (for backward compatibility)
             const pubkey_str = pubkey_value.string;
-            _ = try std.fmt.hexToBytes(pubkey_bytes[1..], pubkey_str);
+            _ = try std.fmt.hexToBytes(&pubkey, pubkey_str);
         } else {
             return error.InvalidPubkeyFormat;
         }
-
-        const pubkey = try secp256k1.PublicKey.fromSlice(&pubkey_bytes);
 
         // Parse created_at
         const created_at = @as(i64, @intCast(root.get("created_at").?.integer));
