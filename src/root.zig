@@ -57,17 +57,21 @@ pub const Note = struct {
     pub fn serialize(self: Note, allocator: std.mem.Allocator) ![]const u8 {
         if (self.sig == null) return error.NoteNotSigned;
 
+        // Escape content for JSON
+        const escaped_content = try std.json.stringifyAlloc(allocator, self.content, .{});
+        defer allocator.free(escaped_content);
+
         // Format the event object
         var event = std.ArrayList(u8).init(allocator);
         defer event.deinit();
 
-        try event.writer().print("{{\"id\":\"{s}\",\"pubkey\":\"{s}\",\"created_at\":{d},\"kind\":{d},\"tags\":{s},\"content\":\"{s}\",\"sig\":\"{s}\"}}", .{
+        try event.writer().print("{{\"id\":\"{s}\",\"pubkey\":\"{s}\",\"created_at\":{d},\"kind\":{d},\"tags\":{s},\"content\":{s},\"sig\":\"{s}\"}}", .{
             std.fmt.fmtSliceHexLower(&self.id),
             std.fmt.fmtSliceHexLower(&self.pubkey.xOnlyPublicKey()[0].serialize()),
             self.created_at,
             self.kind,
             try std.json.stringifyAlloc(allocator, self.tags, .{}),
-            self.content,
+            escaped_content, // Use the escaped content
             std.fmt.fmtSliceHexLower(&self.sig.?.toStr()),
         });
 
@@ -82,13 +86,17 @@ pub const Note = struct {
         var json = std.ArrayList(u8).init(allocator);
         defer json.deinit();
 
-        try json.writer().print("{{\"id\":\"{s}\",\"pubkey\":\"{s}\",\"created_at\":{d},\"kind\":{d},\"tags\":{s},\"content\":\"{s}\"", .{
+        // Escape content for JSON
+        const escaped_content = try std.json.stringifyAlloc(allocator, self.content, .{});
+        defer allocator.free(escaped_content);
+
+        try json.writer().print("{{\"id\":\"{s}\",\"pubkey\":\"{s}\",\"created_at\":{d},\"kind\":{d},\"tags\":{s},\"content\":{s}", .{
             std.fmt.fmtSliceHexLower(&self.id),
             std.fmt.fmtSliceHexLower(&self.pubkey.xOnlyPublicKey()[0].serialize()),
             self.created_at,
             self.kind,
             try std.json.stringifyAlloc(allocator, self.tags, .{}),
-            self.content,
+            escaped_content, // Use the escaped content here
         });
 
         // Add signature if present
@@ -104,11 +112,10 @@ pub const Note = struct {
 
     /// Parse a JSON string into a Note
     pub fn jsonParse(allocator: std.mem.Allocator, json_str: []const u8) !Note {
-        var parser = std.json.TokenStream.init(json_str);
-        const json = try std.json.parse(std.json.Value, &parser, .{ .allocator = allocator });
-        defer std.json.parseFree(std.json.Value, json, .{ .allocator = allocator });
+        const json = try std.json.parseFromSlice(std.json.Value, allocator, json_str, .{});
+        defer json.deinit();
 
-        const root = json.object;
+        const root = json.value.object;
 
         // Parse id
         var id: [32]u8 = undefined;
@@ -120,7 +127,7 @@ pub const Note = struct {
         pubkey_bytes[0] = 0x02; // Add prefix byte (will be corrected when PublicKey is created)
         const pubkey_str = root.get("pubkey").?.string;
         _ = try std.fmt.hexToBytes(pubkey_bytes[1..], pubkey_str);
-        const pubkey = try secp256k1.PublicKey.fromSec1(&pubkey_bytes);
+        const pubkey = try secp256k1.PublicKey.fromSlice(&pubkey_bytes);
 
         // Parse created_at
         const created_at = @as(i64, @intCast(root.get("created_at").?.integer));
@@ -134,9 +141,17 @@ pub const Note = struct {
         // Parse tags - this is more complex as it's a nested structure
         const tags_json = root.get("tags").?.array;
         var tags = try allocator.alloc([]const u8, tags_json.items.len);
-        for (tags_json.items, 0..) |tag_array, i| {
-            const tag_items = tag_array.array.items;
-            tags[i] = try allocator.dupe(u8, tag_items[0].string);
+        for (tags_json.items, 0..) |tag_item, i| {
+            if (tag_item == .string) {
+                tags[i] = try allocator.dupe(u8, tag_item.string);
+            } else if (tag_item == .array) {
+                // Handle nested array case (original structure)
+                const tag_items = tag_item.array.items;
+                tags[i] = try allocator.dupe(u8, tag_items[0].string);
+            } else {
+                // Unexpected type, use a default
+                tags[i] = try allocator.dupe(u8, "unknown");
+            }
         }
 
         // Create note with parsed values
@@ -153,9 +168,12 @@ pub const Note = struct {
         // Parse signature if present
         if (root.get("sig")) |sig_value| {
             const sig_str = sig_value.string;
+            // The signature might be too long, let's extract the correct number of bytes
             var sig_bytes: [64]u8 = undefined;
             _ = try std.fmt.hexToBytes(&sig_bytes, sig_str);
-            note.sig = try secp256k1.schnorr.Signature.fromBytes(sig_bytes);
+            var sig_str_normalized: [128]u8 = undefined; // 64 bytes * 2 for hex
+            _ = try std.fmt.bufPrint(&sig_str_normalized, "{s}", .{std.fmt.fmtSliceHexLower(&sig_bytes)});
+            note.sig = try secp256k1.schnorr.Signature.fromStr(sig_str_normalized[0..128]);
         }
 
         return note;

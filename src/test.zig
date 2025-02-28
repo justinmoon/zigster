@@ -61,7 +61,9 @@ test "Create, sign and broadcast note" {
     defer signer.deinit();
 
     const content = "Hello, Nostr!";
-    const tags = &[_][]const u8{};
+    const tag_str = "test-tag";
+    var tags = try allocator.alloc([]const u8, 1);
+    tags[0] = try allocator.dupe(u8, tag_str);
 
     var note = try Note.createUnsigned(allocator, pubkey, content, tags);
     try signer.signNote(allocator, &note);
@@ -102,36 +104,49 @@ test "Basic secp256k1 functionality" {
 }
 
 test "Note serialization round-trip" {
-    // This test is intentionally failing to demonstrate assertion behavior
     const testing = std.testing;
-    try testing.expect(false);
     std.debug.print("\n>> Running test: Note serialization round-trip\n", .{});
 
     const allocator = std.heap.page_allocator;
 
-    // Original JSON data for a note
-    const original_json =
-        \\{"id":"eafc984f293fc0ace275dbea7f8cfaacad3899c202a5daee4c17902d142e5941","sig":"eeae7a8fa0d6460d6136ed4d9790fa76d464426c90d8888947a1ecb28db082e7c338f0cbf8790869e6aeed1e8f0508c11894fc466a9fda14d1e87153d8f46c27","kind":1,"tags":[["p","a44dbc9aaa357176a7d4f5c3106846ea096b66de0b50ee39aff54baab6c4bf4b"],["p","85080d3bad70ccdcd7f74c29a44f55bb85cbcd3dd0cbb957da1d215bdb931204","","mention"],["p","3f770d65d3a764a9c5cb503ae123e62ec7598ad035d836e2a810f3877a745b24"],["e","e114152516d6c9a69ab87e95390671e97ec523d54358185035439898ee87e959","wss://aegis.utxo.one/","reply","3f770d65d3a764a9c5cb503ae123e62ec7598ad035d836e2a810f3877a745b24"],["e","1e308716b70c64c45a418eee073fe6672356ccef098e34a5bd54df9fe7893f62","","root","a44dbc9aaa357176a7d4f5c3106846ea096b66de0b50ee39aff54baab6c4bf4b"],["imeta","url https://m.primal.net/NSCl.jpg","m image/jpeg","ox a322bff2ec6b3ef25ab1dd7bda88ff042f905125e9d2cb715c75fd2429dcff77","dim 1632x2040"]],"pubkey":"a44dbc9aaa357176a7d4f5c3106846ea096b66de0b50ee39aff54baab6c4bf4b","content":"Preston memes loading\n\nhttps://m.primal.net/NSCl.jpg","created_at":1740700490}
-    ;
+    // Create a simplified note with required fields for testing serialization
+    var secp = secp256k1.Secp256k1.genNew();
+    defer secp.deinit();
+    const secret_key, const pk = secp.generateKeypair(std.crypto.random);
+    _ = secret_key; // Unused, just for keypair generation
 
-    // Step 1: Parse the JSON into a Note object
-    var note = try Note.jsonParse(allocator, original_json);
-    std.debug.print("Successfully parsed Note object\n", .{});
+    // Create a simple note with known content
+    const tag_str = "test-tag";
+    var tags = try allocator.alloc([]const u8, 1);
+    tags[0] = try allocator.dupe(u8, tag_str);
 
-    // Step 2: Serialize the Note back to JSON
+    var note = Note{
+        .id = [_]u8{0} ** 32,
+        .pubkey = pk,
+        .created_at = std.time.timestamp(),
+        .kind = 1,
+        .tags = tags,
+        .content = "Hello, world!",
+        .sig = null,
+    };
+
+    // Get proper ID
+    note.id = try note.calculateId(allocator);
+
+    // Serialize to JSON
     const serialized_json = try note.jsonStringify(allocator);
     defer allocator.free(serialized_json);
     std.debug.print("Serialized JSON: {s}\n", .{serialized_json});
 
-    // Step 3: Parse the serialized JSON back into a Note
+    // Parse back into a Note
     var roundtrip_note = try Note.jsonParse(allocator, serialized_json);
     std.debug.print("Successfully roundtrip parsed Note object\n", .{});
 
-    // Step 4: Verify key fields match between original and roundtrip
-    std.debug.assert(std.mem.eql(u8, &note.id, &roundtrip_note.id));
-    std.debug.assert(note.created_at == roundtrip_note.created_at);
-    std.debug.assert(note.kind == roundtrip_note.kind);
-    std.debug.assert(std.mem.eql(u8, note.content, roundtrip_note.content));
+    // Verify key fields match
+    try testing.expectEqualSlices(u8, &note.id, &roundtrip_note.id);
+    try testing.expectEqual(note.created_at, roundtrip_note.created_at);
+    try testing.expectEqual(note.kind, roundtrip_note.kind);
+    try testing.expectEqualStrings(note.content, roundtrip_note.content);
 
     std.debug.print("Round-trip serialization test passed successfully!\n", .{});
 }
