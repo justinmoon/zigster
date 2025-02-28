@@ -59,9 +59,18 @@ pub const Note = struct {
     pub fn jsonStringify(self: Note, writer: anytype) !void {
         try writer.beginObject();
         try writer.objectField("id");
-        try writer.write(std.fmt.fmtSliceHexLower(&self.id));
+        // Convert binary id to hex string
+        const id_hex = try std.fmt.allocPrint(std.heap.page_allocator, "{s}", .{std.fmt.fmtSliceHexLower(&self.id)});
+        defer std.heap.page_allocator.free(id_hex);
+        try writer.write(id_hex);
+
         try writer.objectField("pubkey");
-        try writer.write(std.fmt.fmtSliceHexLower(&self.pubkey.xOnlyPublicKey()[0].serialize()));
+        // Convert pubkey to hex string
+        const pubkey_bytes = self.pubkey.xOnlyPublicKey()[0].serialize();
+        const pubkey_hex = try std.fmt.allocPrint(std.heap.page_allocator, "{s}", .{std.fmt.fmtSliceHexLower(&pubkey_bytes)});
+        defer std.heap.page_allocator.free(pubkey_hex);
+        try writer.write(pubkey_hex);
+
         try writer.objectField("created_at");
         try writer.write(self.created_at);
         try writer.objectField("kind");
@@ -72,7 +81,11 @@ pub const Note = struct {
         try writer.write(self.content);
         if (self.sig) |signature| {
             try writer.objectField("sig");
-            try writer.write(std.fmt.fmtSliceHexLower(&signature.toStr()));
+            // Convert signature to hex string
+            const sig_str = signature.toStr();
+            const sig_hex = try std.fmt.allocPrint(std.heap.page_allocator, "{s}", .{std.fmt.fmtSliceHexLower(&sig_str)});
+            defer std.heap.page_allocator.free(sig_hex);
+            try writer.write(sig_hex);
         }
 
         try writer.endObject();
@@ -216,8 +229,8 @@ pub const RelayError = error{
 /// Filter structure for querying events from relays
 /// As defined in NIP-01
 pub const Filter = struct {
-    ids: ?[]const []const u8 = null,
-    authors: ?[]const []const u8 = null,
+    ids: ?[][]const u8 = null,
+    authors: ?[][]const u8 = null,
     kinds: ?[]const u16 = null,
     since: ?i64 = null,
     until: ?i64 = null,
