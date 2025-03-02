@@ -204,7 +204,7 @@ pub const Signer = struct {
     /// Sign a note, updating its id and sig fields
     pub fn signNote(self: *Signer, allocator: std.mem.Allocator, note: *Note) !void {
         note.id = try note.calculateId(allocator);
-        const signature = try self.secret_key.sign(&note.id);
+        const signature = try self.secret_key.signHash(note.id);
         note.sig = signature.inner;
     }
 };
